@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>node-pty + xterm</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        #terminal {
+            height: 100vh;
+            width: 100vw;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="terminal"></div>
+    <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+    <script>
+        const term = new window.Terminal({ convertEol: true, cursorBlink: true });
+        const fitAddon = new window.FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        const ws = new WebSocket(`ws://${location.host}/terminal`);
+
+        ws.addEventListener('open', () => {
+            // send initial size
+            const { cols, rows } = term;
+            ws.send(JSON.stringify({ type: 'resize', data: { cols, rows } }));
+            term.focus();
+        });
+
+        ws.addEventListener('message', ev => {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'data') term.write(msg.data);
+            if (msg.type === 'exit') term.writeln(`\r\n\n[process exited: code=${msg.exitCode}, signal=${msg.signal}]`);
+        });
+
+
+        term.onData(data => {
+            ws.send(JSON.stringify({ type: 'input', data }));
+        });
+
+        window.addEventListener('resize', () => {
+            fitAddon.fit();
+            ws.send(JSON.stringify({ type: 'resize', data: { cols: term.cols, rows: term.rows } }));
+        });
+    </script>
+</body>
+
+</html>
