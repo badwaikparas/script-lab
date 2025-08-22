@@ -82,17 +82,19 @@ const WebTerminal = () => {
     };
 
     return (
-        <div className="flex flex-col h-full w-full">
+        <div className="flex flex-col h-full w-full p-4">
             <button
                 onClick={onButtonPress}
                 className="bg-blue-500 text-white px-4 py-2 rounded shadow mb-2 self-start"
             >
                 Start Docker Container
             </button>
-            <div
-                ref={terminalRef}
-                className="flex-1 w-full border rounded overflow-hidden"
-            ></div>
+            <div className="p-3 bg-black rounded flex-1">
+                <div
+                    ref={terminalRef}
+                    className="flex-1 w-full h-full rounded overflow-hidden"
+                ></div>
+            </div>
         </div>
     );
 };
