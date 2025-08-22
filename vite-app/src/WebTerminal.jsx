@@ -1,4 +1,3 @@
-// Terminal.jsx
 import React, { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -11,25 +10,18 @@ const WebTerminal = () => {
     const ws = useRef(null);
 
     useEffect(() => {
-        // initialize terminal
         term.current = new Terminal({
             convertEol: true,
             cursorBlink: true,
-            // cursorStyle: 'bar'
         });
         fitAddon.current = new FitAddon();
         term.current.loadAddon(fitAddon.current);
 
         if (terminalRef.current) {
             term.current.open(terminalRef.current);
+            fitAddon.current.fit();
         }
 
-        if (term.current && !term.current._disposed) {
-            fitAddon.current?.fit();
-        }
-
-        // connect websocket
-        // ws.current = new WebSocket(`ws://${window.location.host}/terminal`);
         ws.current = new WebSocket(`ws://localhost:3000/terminal`);
 
         const handleBeforeUnload = () => {
@@ -59,28 +51,17 @@ const WebTerminal = () => {
             ws.current.send(JSON.stringify({ type: "input", data }));
         });
 
-
-        // resize handling
-        // const handleResize = () => {
-        //     if (term.current?._core?._renderService) {
-        //         fitAddon.current.fit();
-        //         ws.current?.send(JSON.stringify({
-        //             type: "resize",
-        //             data: { cols: term.current.cols, rows: term.current.rows }
-        //         }));
-        //     }
-        // };
-
         const handleResize = () => {
             if (term.current && !term.current._disposed) {
-                fitAddon.current?.fit();
-                ws.current?.send(JSON.stringify({
-                    type: "resize",
-                    data: { cols: term.current.cols, rows: term.current.rows }
-                }));
+                fitAddon.current.fit();
+                ws.current?.send(
+                    JSON.stringify({
+                        type: "resize",
+                        data: { cols: term.current.cols, rows: term.current.rows },
+                    })
+                );
             }
         };
-
 
         window.addEventListener("resize", handleResize);
 
@@ -95,15 +76,13 @@ const WebTerminal = () => {
     const onButtonPress = () => {
         const commands = [
             "docker run --rm -it ubuntu:latest bash",
-            // "apt-get update",
-            // "apt-get install nano -y",
             "clear",
         ];
         ws.current.send(JSON.stringify({ type: "commands", data: commands }));
     };
 
     return (
-        <div className="flex-1">
+        <div className="flex flex-col h-full w-full">
             <button
                 onClick={onButtonPress}
                 className="bg-blue-500 text-white px-4 py-2 rounded shadow mb-2 self-start"
@@ -112,7 +91,7 @@ const WebTerminal = () => {
             </button>
             <div
                 ref={terminalRef}
-                className="w-full border rounded"
+                className="flex-1 w-full border rounded overflow-hidden"
             ></div>
         </div>
     );

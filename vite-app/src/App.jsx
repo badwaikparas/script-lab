@@ -4,9 +4,11 @@ import Navbar from "./components/Navbar";
 
 function App() {
     return (
-        <div>
+        <div className="h-screen w-screen flex flex-col"> {/* full height column layout */}
             <Navbar />
-            <WebTerminal />
+            <div className="flex-1"> {/* take remaining space */}
+                <WebTerminal />
+            </div>
         </div>
     );
 }
