@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ server, path: '/terminal' });
 app.use(express.static('public'));
 
 wss.on('connection', (ws, req) => {
-    const shell = os.platform() === 'win32' ? 'cmd.exe' : process.env.SHELL || 'bash';
+    const shell = os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash';
 
     const p = pty.spawn(shell, [], {
         name: 'xterm-color',
@@ -30,6 +30,8 @@ wss.on('connection', (ws, req) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'data', data }));
     });
 
+
+
     p.onExit(({ exitCode, signal }) => {
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
@@ -38,47 +40,15 @@ wss.on('connection', (ws, req) => {
         console.log(`[PTY] exited pid=${p.pid} code=${exitCode} signal=${signal ?? 'null'}`);
     });
 
-    // Function: run an array of commands sequentially
-    function runCommands(commands) {
-        let index = 0;
 
-        const sendNext = () => {
-            if (index < commands.length) {
-                const cmd = commands[index];
-                console.log(`>>> Running: ${cmd}`);
-                p.write(cmd + "\r");
-                index++;
-            }
-        };
-
-        // Watch for prompt to trigger next command
-        p.onData(data => {
-            if ((data.includes('$ ') || data.includes('# ') || data.includes('> ') && !data.includes('>>'))) {
-                sendNext();
-            }
-        });
-
-        // Kick off the first command
-        sendNext();
-    }
 
     // Browser -> PTY
     ws.on('message', msg => {
         try {
             const { type, data } = JSON.parse(msg);
-
-            if (type === 'input') {
-                // normal user keystrokes from frontend
-                p.write(data);
-            }
-
+            if (type === 'input') p.write(data);
             if (type === 'resize' && data?.cols && data?.rows) {
                 p.resize(Math.max(1, data.cols), Math.max(1, data.rows));
-            }
-
-            if (type === 'commands' && Array.isArray(data)) {
-                // new feature: run array of commands
-                runCommands(data);
             }
         } catch {
             // allow raw passthrough for simpler clients

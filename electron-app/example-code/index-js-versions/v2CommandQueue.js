@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ server, path: '/terminal' });
 app.use(express.static('public'));
 
 wss.on('connection', (ws, req) => {
-    const shell = os.platform() === 'win32' ? 'cmd.exe' : process.env.SHELL || 'bash';
+    const shell = os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash';
 
     const p = pty.spawn(shell, [], {
         name: 'xterm-color',

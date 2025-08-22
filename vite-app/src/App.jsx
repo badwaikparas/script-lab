@@ -1,11 +1,12 @@
 import React from "react";
-import XTermTerminal from "./XTermTerminal";
+import WebTerminal from "./WebTerminal";
+import Navbar from "./components/Navbar";
 
 function App() {
     return (
-        <div className="App">
-            <h1>React + xterm.js</h1>
-            <XTermTerminal />
+        <div>
+            <Navbar />
+            <WebTerminal />
         </div>
     );
 }

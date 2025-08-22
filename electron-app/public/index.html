@@ -21,6 +21,7 @@
 </head>
 
 <body>
+    <button onclick="onButtonPress()">Start Docker Container</button>
     <div id="terminal"></div>
     <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
@@ -46,6 +47,20 @@
             if (msg.type === 'exit') term.writeln(`\r\n\n[process exited: code=${msg.exitCode}, signal=${msg.signal}]`);
         });
 
+        const commands = [
+            // "ping www.google.com",
+            // 'while ($true) { Write-Output "y" }',
+            // "docker pull ubuntu:latest",
+            //"docker run --rm -it ubuntu:latest bash\r",
+            // "exit\r", // so the container closes and flow continues
+            // "docker ps -a",
+            "docker run --rm -it ubuntu:latest bash",
+            "clear"
+        ];
+
+        function onButtonPress() {
+            ws.send(JSON.stringify({ type: 'commands', data: commands }))
+        }
 
         term.onData(data => {
             ws.send(JSON.stringify({ type: 'input', data }));
