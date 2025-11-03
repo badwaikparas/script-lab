@@ -9,11 +9,45 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/terminal' });
 
-// serve static frontend files (place your index.html with xterm.js in ./public)
+// serve static frontend files
 app.use(express.static('public'));
+
+
+// ✅ ADDED — function to get host limits safely
+function getHostLimits() {
+    const totalMemGB = os.totalmem() / 1024 / 1024 / 1024;
+    const freeMemGB = os.freemem() / 1024 / 1024 / 1024;
+
+    const safeRamGB = freeMemGB * 0.8; // leave buffer for OS
+
+    const cores = os.cpus().length;
+    const load1 = os.loadavg()[0];
+    const safeCpu = Math.max(0.1, (cores - load1) - 0.5);
+
+    return {
+        totalRamGB: Number(totalMemGB.toFixed(3)),
+        freeRamGB: Number(freeMemGB.toFixed(3)),
+        safeRamGB: Number(safeRamGB.toFixed(3)),
+        totalCores: cores,
+        load1: Number(load1.toFixed(3)),
+        safeCpu: Number(safeCpu.toFixed(3)),
+    };
+}
+
+// ✅ ADDED — convert user RAM/GPU inputs into docker-input format
+function formatRamToDocker(valGB) {
+    console.log("valGB : " + valGB)
+    if (valGB < 1) {
+        return `${Math.round(valGB * 1024)}m`; // convert to MB
+    }
+    return `${valGB}g`;
+}
 
 wss.on('connection', (ws, req) => {
     const shell = os.platform() === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash';
+
+    // ✅ NEW: send host limits on connect
+    ws.send(JSON.stringify({ type: "host_limits", data: getHostLimits() }));
 
     const p = pty.spawn(shell, [], {
         name: 'xterm-color',
@@ -25,9 +59,10 @@ wss.on('connection', (ws, req) => {
 
     console.log(`[PTY] client connected, pid=${p.pid}`);
 
-    // PTY -> Browser
+    // PTY → Browser
     p.onData(data => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'data', data }));
+        if (ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type: 'data', data }));
     });
 
     p.onExit(({ exitCode, signal }) => {
@@ -38,7 +73,7 @@ wss.on('connection', (ws, req) => {
         console.log(`[PTY] exited pid=${p.pid} code=${exitCode} signal=${signal ?? 'null'}`);
     });
 
-    // Function: run an array of commands sequentially
+    // existing command-sequencer unchanged
     function runCommands(commands) {
         let index = 0;
 
@@ -51,37 +86,78 @@ wss.on('connection', (ws, req) => {
             }
         };
 
-        // Watch for prompt to trigger next command
         p.onData(data => {
-            if ((data.includes('$ ') || data.includes('# ') || data.includes('> ') && !data.includes('>>'))) {
+            if ((data.includes('$ ') || data.includes('# ') || data.includes('> ')) &&
+                !data.includes('>>')) {
                 sendNext();
             }
         });
 
-        // Kick off the first command
         sendNext();
     }
 
-    // Browser -> PTY
+
+    // ✅ ADDED — function to start Docker with safe resource limits
+    function startDockerContainer(cpu, ramGB) {
+        const memArg = formatRamToDocker(ramGB);
+
+        const dockerCmd =
+            `docker run --rm -it --cpus="${cpu}" --memory="${memArg}" ubuntu:latest bash`;
+
+        console.log("[SAFE DOCKER RUN]:", dockerCmd);
+
+        p.write(dockerCmd + "\r");
+    }
+
+
+    // Browser → PTY
     ws.on('message', msg => {
         try {
             const { type, data } = JSON.parse(msg);
 
-            if (type === 'input') {
-                // normal user keystrokes from frontend
-                p.write(data);
-            }
+            if (type === 'input') p.write(data);
 
             if (type === 'resize' && data?.cols && data?.rows) {
                 p.resize(Math.max(1, data.cols), Math.max(1, data.rows));
             }
 
             if (type === 'commands' && Array.isArray(data)) {
-                // new feature: run array of commands
                 runCommands(data);
             }
+
+            // ✅ NEW — handle container start request
+            if (type === "start_container") {
+                const { cpu, ramGB } = data;
+                const limits = getHostLimits();
+
+                // ✅ Validate CPU
+                if (cpu > limits.safeCpu) {
+                    ws.send(JSON.stringify({
+                        type: "error",
+                        message: `Requested CPU (${cpu}) exceeds safe limit (${limits.safeCpu})`
+                    }));
+                    return;
+                }
+
+                // ✅ Validate RAM
+                if (ramGB > limits.safeRamGB) {
+                    ws.send(JSON.stringify({
+                        type: "error",
+                        message: `Requested RAM (${ramGB} GB) exceeds safe limit (${limits.safeRamGB} GB)`
+                    }));
+                    return;
+                }
+
+                // ✅ All good → start container
+                startDockerContainer(cpu, ramGB);
+
+                ws.send(JSON.stringify({
+                    type: "started",
+                    message: `Container started with CPU=${cpu}, RAM=${ramGB}GB`
+                }));
+            }
+
         } catch {
-            // allow raw passthrough for simpler clients
             p.write(msg.toString());
         }
     });
