@@ -46,7 +46,11 @@ wss.on('connection', (ws, req) => {
             if (index < commands.length) {
                 const cmd = commands[index];
                 console.log(`>>> Running: ${cmd}`);
-                p.write(cmd + "\r");
+                if (cmd === "EOF") {
+                    p.write('\x04')
+                } else {
+                    p.write(cmd + "\r");
+                }
                 index++;
             }
         };
@@ -78,6 +82,7 @@ wss.on('connection', (ws, req) => {
 
             if (type === 'commands' && Array.isArray(data)) {
                 // new feature: run array of commands
+                console.log("running Commands:", data);
                 runCommands(data);
             }
         } catch {
