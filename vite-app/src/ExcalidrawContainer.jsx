@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
-import { useWebSocket } from "./utils/WebSocketContext";
+// import { useWebSocket } from "./utils/WebSocketContext";
 import "@excalidraw/excalidraw/index.css";
 
-export default function ExcalidrawContainer() {
+export default function ExcalidrawContainer({ sharedWs }) {
     // const ws = useRef(null)
-    const ws = useWebSocket()
+    const [ws, setWs] = useState(null);
     const [excalidrawAPI, setExcalidrawAPI] = useState(null);
+
+    useEffect(() => {
+        setWs(sharedWs.current)
+    }, [sharedWs])
 
     const getData = () => {
         if (!excalidrawAPI) return;
@@ -60,7 +64,8 @@ export default function ExcalidrawContainer() {
 
     const sendCommandsToBackend = (commands) => {
         console.log("sending commands: " + commands)
-        ws.current.send(JSON.stringify({ type: "commands", data: commands }));
+        console.log("IN ExcaliDRaw", ws)
+        ws?.wsRef?.current?.send(JSON.stringify({ type: "commands", data: commands }));
     }
 
     // const sendCommandsToBackend = (commands) => {

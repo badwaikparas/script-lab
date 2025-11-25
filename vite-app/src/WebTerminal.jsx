@@ -1,18 +1,25 @@
 import React, { useEffect, useRef } from "react";
-import { useWebSocket } from "./utils/WebSocketContext";
+// import { useWebSocket } from "./utils/WebSocketContext";
+import useTerminalWS from "./hooks/useTerminalWS.js"
 import { Terminal } from "xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "xterm/css/xterm.css";
 
-const WebTerminal = () => {
+const WebTerminal = ({ sharedWs }) => {
     // const ws = useRef(null)
-    const ws = useWebSocket();
+    const ws = useTerminalWS();
     const terminalRef = useRef(null);
     const term = useRef(null);
     const fitAddon = useRef(null);
 
     useEffect(() => {
-        if (!ws.current) return;   // ✅ now effect only runs when ws becomes available
+        console.log("IN TERMINAL", ws)
+        sharedWs.current = ws
+    }, [])
+
+    useEffect(() => {
+        console.log(ws.wsRef)
+        if (!ws.wsRef.current) return;   // ✅ now effect only runs when ws becomes available
 
         term.current = new Terminal({
             convertEol: true,
@@ -28,8 +35,8 @@ const WebTerminal = () => {
         }
 
         const handleBeforeUnload = () => {
-            if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-                ws.current.send(JSON.stringify({
+            if (ws.wsRef.current && ws.wsRef.current.readyState === WebSocket.OPEN) {
+                ws.wsRef.current.send(JSON.stringify({
                     type: "commands",
                     data: ["exit"],
                 }));
@@ -38,16 +45,16 @@ const WebTerminal = () => {
 
         window.addEventListener("beforeunload", handleBeforeUnload);
 
-        ws.current.addEventListener("open", () => {
+        ws.wsRef.current.addEventListener("open", () => {
             const { cols, rows } = term.current;
-            ws.current.send(JSON.stringify({
+            ws.wsRef.current.send(JSON.stringify({
                 type: "resize",
                 data: { cols, rows },
             }));
             term.current.focus();
         });
 
-        ws.current.addEventListener("message", (ev) => {
+        ws.wsRef.current.addEventListener("message", (ev) => {
             const msg = JSON.parse(ev.data);
 
             if (msg.type === "data") term.current.write(msg.data);
@@ -59,7 +66,7 @@ const WebTerminal = () => {
         });
 
         term.current.onData((data) => {
-            ws.current.send(JSON.stringify({
+            ws.wsRef.current.send(JSON.stringify({
                 type: "input",
                 data,
             }));
@@ -68,7 +75,7 @@ const WebTerminal = () => {
         const handleResize = () => {
             if (term.current && !term.current._disposed) {
                 fitAddon.current.fit();
-                ws.current?.send(JSON.stringify({
+                ws.wsRef.current?.send(JSON.stringify({
                     type: "resize",
                     data: {
                         cols: term.current.cols,
@@ -84,9 +91,9 @@ const WebTerminal = () => {
             window.removeEventListener("resize", handleResize);
             window.removeEventListener("beforeunload", handleBeforeUnload);
             term.current?.dispose();
-            ws.current?.close();
+            ws.wsRef.current?.close();
         };
-    }, [ws.current]);   // ✅ THIS LINE FIXES YOUR PROBLEM
+    }, [ws.wsRef]);   // ✅ THIS LINE FIXES YOUR PROBLEM
 
 
     const onButtonPress = () => {
@@ -95,7 +102,7 @@ const WebTerminal = () => {
             "clear",
         ];
 
-        ws.current.send(
+        ws.wsRef.current.send(
             JSON.stringify({
                 type: "commands",
                 data: commands,
